@@ -1,6 +1,8 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RedisService } from '../redis/redis.service';
 import { CqrsMessageService } from './cqrs-message.service';
+import { BullModule, getQueueToken } from '@nestjs/bullmq';
+import { Queue, QueueEvents, ConnectionOptions } from 'bullmq';
 
 // Mock Redis client
 const mockRedisClient = {
@@ -23,19 +25,58 @@ jest.mock('redis', () => ({
   createClient: jest.fn(() => mockRedisClient),
 }));
 
+// Mock QueueEvents
+jest.mock('bullmq', () => ({
+  ...jest.requireActual('bullmq'),
+  QueueEvents: jest.fn().mockImplementation((queueName: string, opts?: { connection?: ConnectionOptions }) => ({
+    close: jest.fn().mockResolvedValue(undefined),
+    on: jest.fn(),
+    connection: opts?.connection || {}, // Provide a default mock connection
+  })),
+}));
+
 describe('CQRS Integration Tests', () => {
   let redisService: RedisService;
   let cqrsMessageService: CqrsMessageService;
   let module: TestingModule;
+  let mockCommandQueue: any;
 
   beforeEach(async () => {
     // Reset all mocks
     jest.clearAllMocks();
+
+    mockCommandQueue = {
+      add: jest.fn(),
+      opts: {
+        connection: {
+          host: 'localhost',
+          port: 6379,
+        } as ConnectionOptions,
+      },
+      name: 'command_queue',
+      client: {} as any,
+      bclient: {} as any,
+    };
     
     module = await Test.createTestingModule({
+      imports: [
+        BullModule.forRoot({
+          connection: {
+            host: 'localhost',
+            port: 6379,
+          },
+        }),
+        BullModule.registerQueue({
+          name: 'command_queue',
+        }),
+      ],
       providers: [
         RedisService,
         CqrsMessageService,
+        {
+          provide: getQueueToken('command_queue'),
+          useValue: mockCommandQueue,
+        },
       ],
     }).compile();
 
@@ -47,7 +88,10 @@ describe('CQRS Integration Tests', () => {
   });
 
   afterEach(async () => {
-    await module.close();
+    // Ensure module is defined before closing
+    if (module) {
+      await module.close();
+    }
   });
 
   describe('RedisService Queue Operations', () => {
@@ -62,6 +106,8 @@ describe('CQRS Integration Tests', () => {
       });
 
       // Act
+      // Note: redisService.sendCommandAndWaitResponse is not used in the actual app anymore
+      // This test might need to be updated to reflect the current architecture
       const result = redisService.sendCommandAndWaitResponse(commandType, payload, 5);
 
       // Assert - 验证命令被发送到队列
@@ -126,23 +172,20 @@ describe('CQRS Integration Tests', () => {
       const commandType = 'DELETE_ARTICLE';
       const payload = { id: 'test-article-id' };
       
-      mockRedisClient.lPush.mockResolvedValue(1);
-      mockRedisClient.brPop.mockResolvedValue({
-        key: 'response:test-id',
-        element: JSON.stringify({ success: true, data: { success: true } })
-      });
+      // Mock BullMQ Queue.add and Job.waitUntilFinished
+      const mockJob = {
+        id: 'job-id',
+        waitUntilFinished: jest.fn().mockResolvedValue({ success: true, data: { success: true } }),
+      };
+      (mockCommandQueue.add as jest.Mock).mockResolvedValue(mockJob as any);
 
       // Act
-      const resultPromise = cqrsMessageService.handleCommand(commandType, payload);
-
-      // Let the async operations settle
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const result = await cqrsMessageService.handleCommand(commandType, payload);
 
       // Assert
-      expect(mockRedisClient.lPush).toHaveBeenCalledWith(
-        'command_queue',
-        expect.stringContaining(commandType)
-      );
+      expect(mockCommandQueue.add).toHaveBeenCalledWith(commandType, payload, expect.any(Object));
+      expect(mockJob.waitUntilFinished).toHaveBeenCalled();
+      expect(result).toEqual({ success: true, data: { success: true } });
     });
 
     it('should handle query with cache miss', async () => {
@@ -152,78 +195,72 @@ describe('CQRS Integration Tests', () => {
       const cacheKey = 'article:test-id';
       
       // Mock cache miss
-      mockRedisClient.get.mockResolvedValue(null);
+      jest.spyOn(redisService, 'getCachedQueryResult').mockResolvedValue(null);
       
-      // Mock command processing
-      mockRedisClient.lPush.mockResolvedValue(1);
-      mockRedisClient.brPop.mockResolvedValue({
-        key: 'response:test-id',
-        element: JSON.stringify({ 
+      // Mock BullMQ Queue.add and Job.waitUntilFinished
+      const mockJob = {
+        id: 'job-id',
+        waitUntilFinished: jest.fn().mockResolvedValue({ 
           success: true, 
           data: { id: 'test-id', title: 'Test Article' } 
-        })
-      });
+        }),
+      };
+      (mockCommandQueue.add as jest.Mock).mockResolvedValue(mockJob as any);
       
       // Mock cache set
-      mockRedisClient.setEx.mockResolvedValue('OK');
+      jest.spyOn(redisService, 'cacheQueryResult').mockResolvedValue(undefined);
 
       // Act
-      const resultPromise = cqrsMessageService.handleQuery(queryType, params, cacheKey);
-
-      // Let the async operations settle
-      await new Promise(resolve => setTimeout(resolve, 10));
+      const result = await cqrsMessageService.handleQuery(queryType, params, cacheKey);
 
       // Assert
-      expect(mockRedisClient.get).toHaveBeenCalledWith(cacheKey);
-      expect(mockRedisClient.lPush).toHaveBeenCalledWith(
-        'command_queue',
-        expect.stringContaining(queryType)
-      );
+      expect(redisService.getCachedQueryResult).toHaveBeenCalledWith(cacheKey);
+      expect(mockCommandQueue.add).toHaveBeenCalledWith(queryType, params, expect.any(Object));
+      expect(mockJob.waitUntilFinished).toHaveBeenCalled();
+      expect(redisService.cacheQueryResult).toHaveBeenCalledWith(cacheKey, { success: true, data: { id: 'test-id', title: 'Test Article' } }, 3600);
+      expect(result).toEqual({ success: true, data: { id: 'test-id', title: 'Test Article' } });
+    });
+
+    it('should handle query with cache hit', async () => {
+      // Arrange
+      const queryType = 'GET_ARTICLE_BY_ID';
+      const params = { id: 'test-id' };
+      const cacheKey = 'article:test-id';
+      const cachedData = { id: 'test-id', title: 'Cached Article' };
+      
+      // Mock cache hit
+      jest.spyOn(redisService, 'getCachedQueryResult').mockResolvedValue(cachedData);
+      // Mock cacheQueryResult to be a spy
+      jest.spyOn(redisService, 'cacheQueryResult').mockResolvedValue(undefined);
+      
+      // Act
+      const result = await cqrsMessageService.handleQuery(queryType, params, cacheKey);
+
+      // Assert
+      expect(redisService.getCachedQueryResult).toHaveBeenCalledWith(cacheKey);
+      expect(mockCommandQueue.add).not.toHaveBeenCalled(); // Should not send to queue
+      expect(redisService.cacheQueryResult).not.toHaveBeenCalled(); // Should not cache again
+      expect(result).toEqual(cachedData);
     });
   });
 
   describe('Error Handling', () => {
-    it('should handle Redis connection errors', async () => {
+    it('should handle BullMQ job failures', async () => {
       // Arrange
-      mockRedisClient.rPop.mockRejectedValue(new Error('Redis connection failed'));
+      const commandType = 'FAIL_COMMAND';
+      const payload = { message: 'This command will fail' };
+      const mockError = new Error('Job processing failed');
+
+      const mockJob = {
+        id: 'job-id',
+        waitUntilFinished: jest.fn().mockRejectedValue(mockError),
+      };
+      (mockCommandQueue.add as jest.Mock).mockResolvedValue(mockJob as any);
 
       // Act & Assert
-      await expect(redisService.getCommandFromQueueNonBlocking()).rejects.toThrow('Redis connection failed');
-    });
-
-    it('should handle malformed queue messages', async () => {
-      // Arrange
-      mockRedisClient.rPop.mockResolvedValue('invalid-json');
-
-      // Act & Assert
-      await expect(redisService.getCommandFromQueueNonBlocking()).rejects.toThrow();
-    });
-  });
-
-  describe('Performance Tests', () => {
-    it('should handle multiple concurrent commands', async () => {
-      // Arrange
-      const commands = Array.from({ length: 10 }, (_, i) => ({
-        type: 'DELETE_ARTICLE',
-        payload: { id: `article-${i}` }
-      }));
-
-      mockRedisClient.lPush.mockResolvedValue(1);
-      mockRedisClient.brPop.mockResolvedValue({
-        key: 'response:test-id',
-        element: JSON.stringify({ success: true, data: { success: true } })
-      });
-
-      // Act
-      const promises = commands.map(cmd => 
-        cqrsMessageService.handleCommand(cmd.type, cmd.payload)
-      );
-
-      // Let all operations settle
-      await new Promise(resolve => setTimeout(resolve, 100));
-
-      // Assert
-      expect(mockRedisClient.lPush).toHaveBeenCalledTimes(10);
+      await expect(cqrsMessageService.handleCommand(commandType, payload)).rejects.toThrow(mockError);
+      expect(mockCommandQueue.add).toHaveBeenCalledWith(commandType, payload, expect.any(Object));
+      expect(mockJob.waitUntilFinished).toHaveBeenCalled();
     });
   });
 });
