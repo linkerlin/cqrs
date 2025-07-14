@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CQRS CMS - 测试页面</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f3f4f6;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 { color: #1f2937; margin-bottom: 20px; }
+        .status { 
+            padding: 10px; 
+            margin: 10px 0; 
+            border-radius: 5px; 
+            border-left: 4px solid #10b981;
+            background-color: #ecfdf5;
+        }
+        .error { 
+            border-left-color: #ef4444; 
+            background-color: #fef2f2; 
+        }
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 CQRS CMS 系统测试</h1>
+        
+        <div class="status">
+            ✅ 静态页面已加载成功
+        </div>
+        
+        <div id="react-test" class="status error">
+            ⏳ 正在测试React应用...
+        </div>
+        
+        <div id="api-test" class="status error">
+            ⏳ 正在测试API连接...
+        </div>
+        
+        <h2>问题诊断</h2>
+        <p>如果您看到这个页面，说明：</p>
+        <ul>
+            <li>✅ Web服务器正常运行</li>
+            <li>✅ 静态文件可以正常访问</li>
+            <li>❓ React应用状态待检查</li>
+        </ul>
+        
+        <h2>手动启动命令</h2>
+        <p>如果自动启动失败，请手动执行以下命令：</p>
+        <pre style="background: #f8f9fa; padding: 15px; border-radius: 5px; overflow-x: auto;">
+cd /Users/linmiao/GitHub/cqrs/frontend
+npm run dev
+        </pre>
+        
+        <h2>访问地址</h2>
+        <ul>
+            <li><a href="http://localhost:5173" target="_blank">前端开发服务器 (5173)</a></li>
+            <li><a href="http://localhost:3000" target="_blank">前端生产服务器 (3000)</a></li>
+            <li><a href="http://localhost:3001/api/health" target="_blank">后端API健康检查</a></li>
+        </ul>
+        
+        <button onclick="window.location.reload()">🔄 刷新测试</button>
+        <button onclick="testReact()">🧪 测试React</button>
+        <button onclick="testAPI()">🌐 测试API</button>
+    </div>
+
+    <script>
+        console.log('测试页面已加载');
+        
+        // 测试React
+        function testReact() {
+            const reactTest = document.getElementById('react-test');
+            try {
+                // 简单检查React是否可用
+                if (typeof React !== 'undefined') {
+                    reactTest.className = 'status';
+                    reactTest.innerHTML = '✅ React库已加载';
+                } else {
+                    reactTest.innerHTML = '❌ React库未找到';
+                }
+            } catch (error) {
+                reactTest.innerHTML = '❌ React测试失败: ' + error.message;
+            }
+        }
+        
+        // 测试API
+        async function testAPI() {
+            const apiTest = document.getElementById('api-test');
+            try {
+                const response = await fetch('http://localhost:3001/api/health');
+                if (response.ok) {
+                    apiTest.className = 'status';
+                    apiTest.innerHTML = '✅ API连接成功';
+                } else {
+                    apiTest.innerHTML = '❌ API响应错误: ' + response.status;
+                }
+            } catch (error) {
+                apiTest.innerHTML = '❌ API连接失败: ' + error.message;
+            }
+        }
+        
+        // 自动测试
+        setTimeout(() => {
+            testAPI();
+        }, 1000);
+    </script>
+</body>
+</html>
