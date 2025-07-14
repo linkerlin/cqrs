@@ -4,6 +4,7 @@ import { articlesApi } from '../services/api';
 import { Article } from '../types';
 import { format } from 'date-fns';
 import { Calendar, User, Tag } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
 
 const ArticleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -82,10 +83,9 @@ const ArticleDetail: React.FC = () => {
               </div>
             )}
           </div>
-          <div
-            className="prose prose-lg max-w-none mx-auto text-gray-800"
-            dangerouslySetInnerHTML={{ __html: article.content }}
-          />
+          <ReactMarkdown className="prose prose-lg max-w-none mx-auto text-gray-800">
+            {article.content}
+          </ReactMarkdown>
         </div>
       </article>
     </div>
