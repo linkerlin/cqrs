@@ -2,6 +2,16 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import { Processor, WorkerHost } from '@nestjs/bullmq';
 import { Job } from 'bullmq';
 import { ModuleRef } from '@nestjs/core';
+import {
+  ArticleCreateHandler,
+  ArticleUpdateHandler,
+  ArticleDeleteHandler,
+  ArticlePublishHandler,
+  ArticleViewIncrementHandler,
+  ArticleGetHandler,
+  ArticleGetBySlugHandler,
+  ArticleGetListHandler,
+} from '../modules/article/article.handler';
 
 export interface CommandHandler {
   handle(payload: any): Promise<any>;
@@ -16,8 +26,15 @@ export class BullMqProcessorService extends WorkerHost implements OnModuleInit {
   }
 
   onModuleInit() {
-    // This is where you would register your handlers.
-    // We will do this from the respective modules (e.g., ArticleModule).
+    // Register all command handlers with the BullMQ processor
+    this.registerCommandHandler('CREATE_ARTICLE', this.moduleRef.get(ArticleCreateHandler));
+    this.registerCommandHandler('UPDATE_ARTICLE', this.moduleRef.get(ArticleUpdateHandler));
+    this.registerCommandHandler('DELETE_ARTICLE', this.moduleRef.get(ArticleDeleteHandler));
+    this.registerCommandHandler('PUBLISH_ARTICLE', this.moduleRef.get(ArticlePublishHandler));
+    this.registerCommandHandler('INCREMENT_ARTICLE_VIEW', this.moduleRef.get(ArticleViewIncrementHandler));
+    this.registerCommandHandler('GET_ARTICLE_BY_ID', this.moduleRef.get(ArticleGetHandler));
+    this.registerCommandHandler('GET_ARTICLE_BY_SLUG', this.moduleRef.get(ArticleGetBySlugHandler));
+    this.registerCommandHandler('GET_ARTICLE_LIST', this.moduleRef.get(ArticleGetListHandler));
   }
 
   registerCommandHandler(commandType: string, handler: CommandHandler) {

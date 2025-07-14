@@ -42,6 +42,23 @@ services:
       timeout: 10s
       retries: 3
 
+  # BullMQ Worker 服务
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: cqrs-cms-worker
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://redis:6379
+    volumes:
+      - ./backend/cms.db:/app/cms.db
+    command: npm run start:worker
+
   # 前端服务
   frontend:
     build:

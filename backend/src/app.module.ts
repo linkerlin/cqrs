@@ -22,7 +22,7 @@ import { AppController } from './app.controller';
         port: 6379,
       },
     }),
-    CqrsModule,
+    
     TypeOrmModule.forRoot({
       type: 'sqlite',
       database: 'cms.db',

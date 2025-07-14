@@ -1,7 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { CqrsMessageService } from './cqrs-message.service';
-import { BullMqProcessorService } from './bullmq-processor.service';
 import { RedisModule } from '../redis/redis.module';
 
 @Module({
@@ -11,7 +10,7 @@ import { RedisModule } from '../redis/redis.module';
       name: 'command_queue',
     }),
   ],
-  providers: [CqrsMessageService, BullMqProcessorService],
-  exports: [CqrsMessageService, BullMqProcessorService],
+  providers: [CqrsMessageService],
+  exports: [CqrsMessageService],
 })
-export class CqrsMessageModule {} 
+export class CqrsMessageModule {}
