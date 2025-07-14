@@ -4,7 +4,7 @@ import { Repository } from 'typeorm';
 import { Article, ArticleStatus } from '../../entities/article.entity';
 import { Category } from '../../entities/category.entity';
 import { User } from '../../entities/user.entity';
-import { CommandHandler } from '../../cqrs/job-processor.service';
+import { CommandHandler } from '../../cqrs/bullmq-processor.service';
 
 @Injectable()
 export class ArticleCreateHandler implements CommandHandler {

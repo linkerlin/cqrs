@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { articlesApi } from '../services/api';
 import { CreateArticleRequest } from '../types';
 
 const CreateArticle: React.FC = () => {
   const navigate = useNavigate();
+  const { id } = useParams<{ id: string }>(); // Get ID from URL for edit mode
+  const isEditMode = !!id; // Determine if in edit mode
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -15,6 +18,28 @@ const CreateArticle: React.FC = () => {
     content: '',
     status: 'draft'
   });
+
+  useEffect(() => {
+    if (isEditMode && id) {
+      setLoading(true);
+      articlesApi.getArticleById(id)
+        .then(article => {
+          setFormData({
+            title: article.title,
+            slug: article.slug,
+            excerpt: article.excerpt || '',
+            content: article.content,
+            status: article.status,
+          });
+        })
+        .catch(err => {
+          setError(`加载文章失败: ${err.response?.data?.message || err.message}`);
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, [id, isEditMode]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -47,10 +72,14 @@ const CreateArticle: React.FC = () => {
     setError(null);
 
     try {
-      await articlesApi.createArticle(formData);
+      if (isEditMode && id) {
+        await articlesApi.updateArticle(id, formData);
+      } else {
+        await articlesApi.createArticle(formData);
+      }
       navigate('/articles');
     } catch (err: any) {
-      setError(`创建文章失败: ${err.response?.data?.message || err.message}`);
+      setError(`操作失败: ${err.response?.data?.message || err.message}`);
     } finally {
       setLoading(false);
     }
@@ -60,7 +89,7 @@ const CreateArticle: React.FC = () => {
     <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
       <div className="bg-white shadow rounded-lg">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h1 className="text-xl font-semibold text-gray-900">创建新文章</h1>
+          <h1 className="text-xl font-semibold text-gray-900">{isEditMode ? '编辑文章' : '创建新文章'}</h1>
         </div>
         
         <form onSubmit={handleSubmit} className="p-6 space-y-6">
@@ -159,7 +188,7 @@ const CreateArticle: React.FC = () => {
               disabled={loading}
               className="px-4 py-2 bg-primary-600 text-white rounded-md hover:bg-primary-700 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 disabled:opacity-50"
             >
-              {loading ? '创建中...' : '创建文章'}
+              {loading ? (isEditMode ? '保存中...' : '创建中...') : (isEditMode ? '保存文章' : '创建文章')}
             </button>
           </div>
         </form>
@@ -168,4 +197,4 @@ const CreateArticle: React.FC = () => {
   );
 };
 
-export default CreateArticle; 
+export default CreateArticle;

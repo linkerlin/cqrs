@@ -2,7 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { RedisService } from './redis/redis.service';
 import { ArticleDeleteHandler } from './modules/article/article.handler';
-import { JobProcessorService } from './cqrs/job-processor.service';
+
 import { Repository } from 'typeorm';
 import { Article } from './entities/article.entity';
 import { getRepositoryToken } from '@nestjs/typeorm';
@@ -16,7 +16,7 @@ async function debugDeleteArticle() {
   try {
     // 获取服务实例
     const redisService = app.get(RedisService);
-    const jobProcessor = app.get(JobProcessorService);
+    // const jobProcessor = app.get(JobProcessorService);
     const articleRepository = app.get<Repository<Article>>(getRepositoryToken(Article));
 
     console.log('✅ 服务实例获取成功\n');
@@ -148,7 +148,7 @@ async function debugDeleteArticle() {
     }
 
     // 6. 检查Job处理器状态
-    console.log('\n🤖 步骤6: 检查Job处理器状态...');
+    /* console.log('\n🤖 步骤6: 检查Job处理器状态...');
     try {
       // 使用已经注册的处理器进行测试
       console.log('📋 使用已注册的GET_ARTICLE_BY_ID处理器进行测试...');
@@ -164,7 +164,7 @@ async function debugDeleteArticle() {
       
     } catch (debugError) {
       console.error('❌ Job处理器测试失败:', debugError.message);
-    }
+    } */
 
   } catch (error) {
     console.error('❌ 调试过程中发生错误:', error.message);

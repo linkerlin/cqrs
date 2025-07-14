@@ -1,64 +1,74 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, OnModuleDestroy } from '@nestjs/common';
+import { InjectQueue } from '@nestjs/bullmq';
+import { Queue, QueueEvents } from 'bullmq';
 import { RedisService } from '../redis/redis.service';
 
 @Injectable()
-export class CqrsMessageService {
-  constructor(private readonly redisService: RedisService) {}
+export class CqrsMessageService implements OnModuleDestroy {
+  private readonly queueEvents: QueueEvents;
 
-  /**
-   * 处理查询请求
-   * 先检查缓存，如果存在则直接返回
-   * 如果不存在，则发送命令到队列处理
-   */
+  constructor(
+    private readonly redisService: RedisService,
+    @InjectQueue('command_queue') private commandQueue: Queue,
+  ) {
+    this.queueEvents = new QueueEvents('command_queue', {
+      connection: this.commandQueue.opts.connection,
+    });
+  }
+
+  async onModuleDestroy() {
+    await this.queueEvents.close();
+  }
+
+  private async sendCommandAndWaitResponse<T>(
+    commandType: string,
+    payload: any,
+  ): Promise<T> {
+    const job = await this.commandQueue.add(commandType, payload, {
+      removeOnComplete: true,
+      removeOnFail: true,
+    });
+
+    try {
+      const result = await job.waitUntilFinished(this.queueEvents, 30000);
+      return result;
+    } catch (error) {
+      console.error(`[BullMQ] Job ${job.id} failed:`, error);
+      throw error;
+    }
+  }
+
   async handleQuery<T>(
     queryType: string,
     params: any,
     cacheKey: string,
-    cacheTTL: number = 3600
+    cacheTTL: number = 3600,
   ): Promise<T> {
-    // 首先尝试从缓存获取
     const cached = await this.redisService.getCachedQueryResult<T>(cacheKey);
     if (cached) {
       console.log(`Query ${queryType} served from cache`);
       return cached;
     }
 
-    // 缓存不存在，转换为命令处理
     console.log(`Query ${queryType} not in cache, sending to command queue`);
-    const result = await this.redisService.sendCommandAndWaitResponse<T>(
-      queryType,
-      params
-    );
+    const result = await this.sendCommandAndWaitResponse<T>(queryType, params);
 
-    // 缓存结果
     await this.redisService.cacheQueryResult(cacheKey, result, cacheTTL);
 
     return result;
   }
 
-  /**
-   * 处理命令请求
-   * 直接发送到队列处理，不走缓存
-   */
   async handleCommand<T>(commandType: string, payload: any): Promise<T> {
     console.log(`Command ${commandType} sent to queue`);
-    return await this.redisService.sendCommandAndWaitResponse<T>(
-      commandType,
-      payload
-    );
+    return await this.sendCommandAndWaitResponse<T>(commandType, payload);
   }
 
-  /**
-   * 清除相关缓存
-   */
   async clearCache(key: string): Promise<void> {
     await this.redisService.deleteCachedResult(key);
   }
 
-  /**
-   * 按模式清除缓存
-   */
   async clearCacheByPattern(pattern: string): Promise<void> {
     await this.redisService.deleteCachedResultsByPattern(pattern);
   }
-} 
+}
+ 

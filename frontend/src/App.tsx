@@ -5,6 +5,7 @@ import Layout from './components/Layout';
 import ArticleList from './pages/ArticleList';
 // import SimpleArticleList from './pages/SimpleArticleList';
 import CreateArticle from './pages/CreateArticle';
+import ArticleDetail from './pages/ArticleDetail';
 import ApiTest from './components/ApiTest';
 import './App.css';
 
@@ -58,6 +59,8 @@ const App: React.FC = () => {
                 <Route path="/" element={<ArticleList />} />
                 <Route path="/articles" element={<ArticleList />} />
                 <Route path="/articles/create" element={<CreateArticle />} />
+                <Route path="/articles/:id" element={<ArticleDetail />} />
+                <Route path="/articles/:id/edit" element={<CreateArticle />} /> {/* Add new route for editing articles */}
                 <Route path="/api-test" element={<ApiTest />} />
               </Routes>
             </Layout>

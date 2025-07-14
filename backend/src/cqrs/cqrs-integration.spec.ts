@@ -1,6 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RedisService } from '../redis/redis.service';
-import { JobProcessorService } from './job-processor.service';
 import { CqrsMessageService } from './cqrs-message.service';
 
 // Mock Redis client
@@ -26,7 +25,6 @@ jest.mock('redis', () => ({
 
 describe('CQRS Integration Tests', () => {
   let redisService: RedisService;
-  let jobProcessor: JobProcessorService;
   let cqrsMessageService: CqrsMessageService;
   let module: TestingModule;
 
@@ -37,13 +35,11 @@ describe('CQRS Integration Tests', () => {
     module = await Test.createTestingModule({
       providers: [
         RedisService,
-        JobProcessorService,
         CqrsMessageService,
       ],
     }).compile();
 
     redisService = module.get<RedisService>(RedisService);
-    jobProcessor = module.get<JobProcessorService>(JobProcessorService);
     cqrsMessageService = module.get<CqrsMessageService>(CqrsMessageService);
 
     // Initialize services
@@ -121,52 +117,6 @@ describe('CQRS Integration Tests', () => {
         JSON.stringify(responseData)
       );
       expect(mockRedisClient.expire).toHaveBeenCalledWith(responseKey, 60);
-    });
-  });
-
-  describe('JobProcessor Command Handling', () => {
-    let mockHandler: any;
-
-    beforeEach(() => {
-      mockHandler = {
-        handle: jest.fn()
-      };
-    });
-
-    it('should register command handler', () => {
-      // Act
-      jobProcessor.registerCommandHandler('TEST_COMMAND', mockHandler);
-
-      // Assert - 通过日志或内部状态验证（这里我们假设有访问内部状态的方法）
-      expect(true).toBe(true); // 实际测试需要访问私有属性
-    });
-
-    it('should process command message successfully', async () => {
-      // Arrange
-      const testMessage = {
-        id: 'test-id',
-        type: 'DELETE_ARTICLE',
-        payload: { id: 'article-id' },
-        responseKey: 'response:test-id',
-        timestamp: Date.now()
-      };
-
-      mockHandler.handle.mockResolvedValue({ success: true });
-      jobProcessor.registerCommandHandler('DELETE_ARTICLE', mockHandler);
-      
-      // Mock Redis response sending
-      mockRedisClient.lPush.mockResolvedValue(1);
-      mockRedisClient.expire.mockResolvedValue(1);
-
-      // Act - 这里我们测试处理消息的私有方法（需要通过反射或其他方式）
-      // 由于processMessage是私有方法，我们需要其他方式来测试
-      const processMessage = (jobProcessor as any).processMessage;
-      if (processMessage) {
-        await processMessage.call(jobProcessor, testMessage);
-      }
-
-      // Assert
-      expect(mockHandler.handle).toHaveBeenCalledWith(testMessage.payload);
     });
   });
 
@@ -276,4 +226,4 @@ describe('CQRS Integration Tests', () => {
       expect(mockRedisClient.lPush).toHaveBeenCalledTimes(10);
     });
   });
-}); 
+});
